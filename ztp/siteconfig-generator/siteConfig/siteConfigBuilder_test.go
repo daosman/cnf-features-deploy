@@ -2388,3 +2388,111 @@ func Test_siteConfigMap(t *testing.T) {
 		})
 	}
 }
+
+func Test_NodePath(t *testing.T) {
+	nodePathDir := `
+apiVersion: ran.openshift.io/v2
+kind: SiteConfig
+metadata:
+  name: "ex-ocp1"
+  namespace: "ex-ocp1"
+spec:
+  baseDomain: "example.com"
+  pullSecretRef:
+    name: "assisted-deployment-pull-secret"
+  clusterImageSetNameRef: "ocp-4.12"
+  sshPublicKey: "ssh-key"
+  clusters:
+    - clusterName: "ex-ocp1"
+      networkType: "OVNKubernetes"
+      clusterLabels:
+        common: true
+        sites: "ex-ocp1"
+        group: "ex1"
+      clusterNetwork:
+        - cidr: 10.10.11.0/14
+          hostPrefix: 31
+      apiVIP: 10.10.10.5
+      ingressVIP: 10.10.10.6
+      serviceNetwork:
+        - 10.10.12.0/16
+      additionalNTPSources:
+        - 10.10.11.50
+      nodePath: "testdata/node-path-dir"
+`
+	nodePathFile := `
+apiVersion: ran.openshift.io/v2
+kind: SiteConfig
+metadata:
+  name: "ex-ocp1"
+  namespace: "ex-ocp1"
+spec:
+  baseDomain: "example.com"
+  pullSecretRef:
+    name: "assisted-deployment-pull-secret"
+  clusterImageSetNameRef: "ocp-4.12"
+  sshPublicKey: "ssh-key"
+  clusters:
+    - clusterName: "ex-ocp1"
+      networkType: "OVNKubernetes"
+      clusterLabels:
+        common: true
+        sites: "ex-ocp1"
+        group: "ex1"
+      clusterNetwork:
+        - cidr: 10.10.11.0/14
+          hostPrefix: 31
+      apiVIP: 10.10.10.5
+      ingressVIP: 10.10.10.6
+      serviceNetwork:
+        - 10.10.12.0/16
+      additionalNTPSources:
+        - 10.10.11.50
+      nodePath: "testdata/node-path-file/large-nodes.yaml"
+`
+
+	tests := []struct {
+		name            string
+		siteConfigToUse string
+	}{
+		{
+			name:            "siteConfig with nodePath as a directory of nodes",
+			siteConfigToUse: nodePathDir,
+		},
+		{
+			name:            "siteConfig with nodePath as a single file",
+			siteConfigToUse: nodePathFile,
+		},
+		//{
+		//	name:            "siteConfig with nodePath as a single file and a 'nodes:' section",
+		//	siteConfigToUse: nodePathFileWithNodes,
+		//},
+	}
+
+	expectedOutputFile := "testdata/siteConfigNodePathExpectedOutput.yaml"
+	filesData, err := ReadFile(expectedOutputFile)
+	assert.NoError(t, err)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sc := SiteConfig{}
+
+			err := yaml.Unmarshal([]byte(test.siteConfigToUse), &sc)
+			if !cmp.Equal(err, nil) {
+				t.Errorf("Test_siteConfigMap() unmarshal err got = %v, want %v", err.Error(), "no error")
+				t.FailNow()
+			}
+			// Validate NumMasters
+			assert.Equal(t, sc.Spec.Clusters[0].NumMasters, uint8(3))
+			// Validate NumWorkers
+			assert.Equal(t, sc.Spec.Clusters[0].NumWorkers, uint8(12))
+
+			outputStr := checkSiteConfigBuild(t, sc)
+
+			if !cmp.Equal(string(filesData), outputStr) {
+				t.Errorf("Test_NodePath() got = %v, want %v", outputStr, string(filesData))
+			}
+		})
+	}
+
+}

@@ -8,6 +8,8 @@ import (
 
 	"github.com/coreos/go-systemd/unit"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"gopkg.in/yaml.v3"
 )
 
 const localExtraManifestPath = "extra-manifest"
@@ -183,6 +185,7 @@ type Clusters struct {
 	ClusterName            string              `yaml:"clusterName"`
 	HoldInstallation       bool                `yaml:"holdInstallation"`
 	AdditionalNTPSources   []string            `yaml:"additionalNTPSources"`
+	NodePath               string              `yaml:"nodePath"`
 	Nodes                  []Nodes             `yaml:"nodes"`
 	MachineNetwork         []MachineNetwork    `yaml:"machineNetwork"`
 	ServiceNetwork         []string            `yaml:"serviceNetwork"`
@@ -210,6 +213,11 @@ type Clusters struct {
 
 	// optional: merge MachineConfigs into a single CR
 	MergeDefaultMachineConfigs bool `yaml:"mergeDefaultMachineConfigs"`
+}
+
+// ExternalNodes from "nodePath:"
+type ExternalNodes struct {
+	Nodes []Nodes `yaml:"nodes"`
 }
 
 // CPUPartitioningMode is used to drive how a cluster nodes CPUs are Partitioned.
@@ -259,6 +267,32 @@ func (rv *Clusters) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 	*rv = Clusters(out)
+
+	// Add Nodes from "nodePath":
+	if rv.NodePath != "" {
+		// nodePath can contain a single file or a directory of node files
+		nodePathFiles, err := GetNodePathFiles(rv.NodePath)
+		if err != nil {
+			fmt.Printf("Error: could not parse %s as yaml: %s\n", rv.NodePath, err)
+		}
+
+		for _, nodePathFile := range nodePathFiles {
+
+			fileData, err := ReadFile(nodePathFile)
+			if err != nil {
+				fmt.Errorf("Error: could not read file %s: %s\n", nodePathFile, err)
+			}
+			var extNodes ExternalNodes
+			err = yaml.Unmarshal(fileData, &extNodes)
+			if err != nil {
+				fmt.Printf("Error: could not parse %s as yaml: %s\n", nodePathFile, err)
+				fmt.Print(string(Separator))
+				fmt.Println(string(fileData))
+			}
+			rv.Nodes = append(rv.Nodes, extNodes.Nodes...)
+		}
+	}
+
 	// Tally master and worker counts based on node roles
 	rv.NumMasters = 0
 	rv.NumWorkers = 0

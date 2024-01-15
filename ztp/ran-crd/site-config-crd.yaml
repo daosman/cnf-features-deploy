@@ -860,6 +860,12 @@ spec:
                         type: array
                         items:
                           type: string
+                      nodePath:
+                        description: |
+                          An optional path that contains cluster nodes definitions in case
+                          of large node definitions section.  This can be a single file or
+                          a directory of files.
+                        type: string
                       nodes:
                         description: List of the nodes that belong to the cluster.
                         type: array

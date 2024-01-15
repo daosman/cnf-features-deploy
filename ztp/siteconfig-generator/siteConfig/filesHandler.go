@@ -106,3 +106,30 @@ func GetExtraManifestResourceFiles(manifestsPath string) ([]os.FileInfo, error) 
 	}
 	return files, err
 }
+
+func GetNodePathFiles(nodePath string) ([]string, error) {
+	var nodePathFiles []string
+	nodePathInfo, err := os.Stat(nodePath)
+	if err != nil {
+		return nil, err
+	}
+
+	if !nodePathInfo.IsDir() {
+		return []string{nodePath}, nil
+	}
+
+	dirContent, err := os.ReadDir(nodePath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range dirContent {
+		if file.IsDir() || file.Name()[0] == '.' {
+			continue
+		}
+
+		nodePathFiles = append(nodePathFiles, nodePath+"/"+file.Name())
+	}
+
+	return nodePathFiles, nil
+}
